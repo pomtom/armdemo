@@ -1,0 +1,51 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "arm_userIdentityName": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "uami-btl-app",
+            "metadata": {
+                "description": "Name of the user assign identity, must be unique"
+            }
+        },
+        "roleNameGuid": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "A new GUID used to identify the role assignment"
+            }
+        }
+    },
+
+    "variables": {
+        "Role_StorageBlobDataContributor": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+    },
+
+    "resources": [
+        {
+            "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+            "apiVersion": "2018-11-30",
+            "name": "[parameters('arm_userIdentityName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+            }
+        },
+        {
+            //https://docs.microsoft.com/en-us/azure/role-based-access-control/role-assignments-template
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2018-09-01-preview",
+            "name": "[parameters('roleNameGuid')]",
+            "scope": "[concat('Microsoft.ManagedIdentity/userAssignedIdentities', '/', parameters('arm_userIdentityName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('arm_userIdentityName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('Role_StorageBlobDataContributor')]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('arm_userIdentityName')), '2018-11-30').principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        }
+    ]
+}
