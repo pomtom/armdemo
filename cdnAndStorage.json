@@ -1,0 +1,158 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "arm_clientName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the client"
+      }
+    },
+    "arm_environmentName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Environment name"
+      }
+    },
+      "arm_productName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the product"
+      }
+    },
+    "arm_storageAccountName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The name of the storage account that you wish to create."
+      }
+    },
+    "arm_storageAccountType": {
+      "type": "string",
+      "minLength": 1,
+      "allowedValues": [ "Standard_LRS", "Standard_GRS", "Standard_RAGRS", "Standard_ZRS", "Premium_LRS", "Premium_ZRS", "Standard_GZRS", "Standard_RAGZRS" ]
+    },
+    "arm_cdnProfileName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the CDN Profile"
+      }
+    },
+    "arm_cdnEndpointName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the CDN Endpoint, must be unique"
+      }
+    },
+    "arm_cdnSku": {
+      "type": "string",
+      "metadata": {
+        "description": "CDN SKU names"
+      },
+      "defaultValue": "Standard_Microsoft",
+      "allowedValues": [ "Standard_Verizon", "Premium_Verizon", "Custom_Verizon", "Standard_Akamai", "Standard_ChinaCdn", "Standard_Microsoft", "Premium_ChinaCdn", "Standard_AzureFrontDoor", "Premium_AzureFrontDoor", "Standard_955BandWidth_ChinaCdn", "Standard_AvgBandWidth_ChinaCdn", "StandardPlus_ChinaCdn", "StandardPlus_955BandWidth_ChinaCdn", "StandardPlus_AvgBandWidth_ChinaCdn" ]
+    }
+  },
+
+  "variables": {
+
+    "cdnEndpointName": "[format('{0}/{1}-{2}', parameters('arm_cdnProfileName'), parameters('arm_cdnEndpointName'),parameters('arm_environmentName'))]",
+    "storgaeAccountName": "[toLower(format('{0}{1}{2}{3}',parameters('arm_clientName'),parameters('arm_productName'),parameters('arm_storageAccountName'),parameters('arm_environmentName')))]",
+    "originUrl": "[concat(variables('storgaeAccountName'),'.blob.core.windows.net')]",
+    "containerName": "[format('{0}/default/{1}', variables('storgaeAccountName'), 'secureassess')]"
+  },
+
+  "functions": [
+    {
+      "namespace": "RegionSelector",
+      "members": {
+        "getAcronym": {
+          "output": {
+            "type": "string",
+            "value": "[resourceGroup().location]"
+          }
+        }
+      }
+    }
+  ],
+
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('storgaeAccountName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "Client": "[parameters('arm_clientName')]",
+        "displayName": "Storage account",
+        "Env": "[parameters('arm_environmentName')]",
+        "Region": "[RegionSelector.getAcronym()]"
+      },
+      "sku": {
+        "name": "[parameters('arm_storageAccountType')]"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2021-04-01",
+      "name": "[variables('containerName')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storgaeAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Cdn/profiles",
+      "apiVersion": "2020-09-01",
+      "name": "[parameters('arm_cdnProfileName')]",
+      "location": "Global",
+      "tags": {
+        "Client": "[parameters('arm_clientName')]",
+        "displayName": "Cdn Profile",
+        "Env": "[parameters('arm_environmentName')]",
+        "Region": "[RegionSelector.getAcronym()]"
+      },
+      "properties": {},
+      "sku": {
+        "name": "[parameters('arm_cdnSku')]"
+      }
+    },
+    {
+      "type": "Microsoft.Cdn/profiles/endpoints",
+      "apiVersion": "2020-09-01",
+      "name": "[variables('cdnEndpointName')]",
+      "location": "Global",
+      "tags": {
+        "Client": "[parameters('arm_clientName')]",
+        "displayName": "Cdn endpoint",
+        "Env": "[parameters('arm_environmentName')]",
+        "Region": "[RegionSelector.getAcronym()]"
+      },
+      "properties": {
+        "originHostHeader": "[variables('originUrl')]",
+        "isHttpAllowed": true,
+        "isHttpsAllowed": true,
+        "origins": [
+          {
+            "name": "origin1",
+            "properties": {
+              "hostName": "[variables('originUrl')]"
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Cdn/profiles', parameters('arm_cdnProfileName'))]"
+      ]
+    }
+  ],
+  "outputs": {}
+}
