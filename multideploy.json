@@ -64,11 +64,11 @@
         },
         "secondResourceGroup": {
             "type": "string",
-            "defaultValue": "hub1"
+            "defaultValue": "hub1" //{'code': 'ResourceGroupNotFound', 'message': "Resource group 'hub1' could not be found."}
         },
         "secondSubscriptionID": {
             "type": "string",
-            "defaultValue": "d5f319ea-e13b-4cc6-8d7f-f8fca3b923db"
+            "defaultValue": "7fdb1020-ff29-4731-9dea-784a07b4f9e8"
         }
     },
     "functions": [],
