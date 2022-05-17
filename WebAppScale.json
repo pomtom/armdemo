@@ -1,0 +1,315 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "arm_clientName": {
+            "type": "string",
+            "defaultValue": "BTL",
+            "minLength": 1
+        },
+        "arm_assessmentServiceName": {
+            "type": "string",
+            "defaultValue": "scalerapp",
+            "minLength": 1
+        },
+        "arm_appInsightsName": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "AI",
+            "metadata": {
+                "description": "Name of the html delivery, must be unique"
+            }
+        },
+        "arm_hostingPlanName": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "ASP",
+            "metadata": {
+                "description": "Name of the html delivery, must be unique"
+            }
+        },
+        "arm_environmentName": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "Dev",
+            "metadata": {
+                "description": "Environment name"
+            }
+        },
+        "arm_skuName": {
+            "type": "string",
+            "minLength": 1,
+            "allowedValues": [
+                "D1",
+                "F1",
+                "B1",
+                "B2",
+                "B3",
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P2",
+                "P3",
+                "P1V2",
+                "P2V2",
+                "P3V2",
+                "I1",
+                "I2",
+                "I3",
+                "Y1"
+            ],
+            "defaultValue": "S1",
+            "metadata": {
+                "description": "The pricing tier for the hosting plan. https://docs.microsoft.com/en-gb/azure/azure-resource-manager/management/azure-subscription-service-limits#app-service-limits"
+            }
+        },
+        "arm_skuCapacity": {
+            "type": "int",
+            "defaultValue": 1
+        },
+        "arm_appInsightsDataRetention": {
+            "type": "string",
+            "defaultValue": "30",
+            "metadata": {
+                "description": "Data retention in days"
+            }
+        },
+        "metricName": {
+			"type": "string",
+			"defaultValue": "CpuPercentage",
+			"metadata": {
+				"description": "The metric name."
+			}
+		},
+		"metricThresholdToScaleOut": {
+			"type": "int",
+			"defaultValue": 60,
+			"metadata": {
+				"description": "The metric upper threshold.  If the metric value is above this threshold then autoscale engine will initiate scale out action."
+			}
+		},
+		"metricThresholdToScaleIn": {
+			"type": "int",
+			"defaultValue": 20,
+			"metadata": {
+				"description": "The metric lower threshold.  If the metric value is below this threshold then autoscale engine will initiate scale in action."
+			}
+		},
+		"changePercentScaleOut": {
+			"type": "int",
+			"defaultValue": 20,
+			"metadata": {
+				"description": "The percentage to increase the instance count when autoscale engine is initiating scale out action."
+			}
+		},
+		"changePercentScaleIn": {
+			"type": "int",
+			"defaultValue": 10,
+			"metadata": {
+				"description": "The percentage to decrease the instance count when autoscale engine is initiating scale in action."
+			}
+		},
+		"autoscaleEnabled": {
+			"type": "bool",
+            "defaultValue": true,
+			"metadata": {
+				"description": "A boolean to indicate whether the autoscale policy is enabled or disabled."
+			}
+		}
+    },
+    "variables": {
+        "isAlwayOnEnable": "[or (equals(parameters('arm_skuName'), 'P1'), equals(parameters('arm_skuName'), 'P2'),equals(parameters('arm_skuName'), 'P3'),equals(parameters('arm_skuName'), 'P1V2'),equals(parameters('arm_skuName'), 'P2V2'),equals(parameters('arm_skuName'), 'P3V2'),equals(parameters('arm_skuName'), 'S1'),equals(parameters('arm_skuName'), 'S2'),equals(parameters('arm_skuName'), 'S3'))]",
+        "settingName": "[concat(toLower(parameters('arm_hostingPlanName')), '-setting')]",
+        "targetResourceId": "[resourceId('Microsoft.Web/serverFarms/', parameters('arm_hostingPlanName'))]"
+    },
+    "functions": [
+        {
+            "namespace": "RegionSelector",
+            "members": {
+                "getAcronym": {
+                    "output": {
+                        "type": "string",
+                        "value": "[resourceGroup().location]"
+                    }
+                }
+            }
+        }
+    ],
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2021-02-01",
+            "kind": "app",
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('arm_hostingPlanName')]",
+            "properties": {
+                "perSiteScaling": true
+            },
+            "sku": {
+                "capacity": "[parameters('arm_skuCapacity')]",
+                "name": "[parameters('arm_skuName')]",
+                "size": "[parameters('arm_skuName')]"
+            },
+            "tags": {
+                "Client": "[parameters('arm_clientName')]",
+                "displayName": "HostingPlan",
+                "Env": "[parameters('arm_environmentName')]",
+                "Region": "[RegionSelector.getAcronym()]"
+            }
+        },
+        {
+            "apiVersion": "2015-05-01",
+            "kind": "web",
+            "location": "[resourceGroup().location]",
+            "name": "[parameters('arm_appInsightsName')]",
+            "properties": {
+                "application_Type": "web",
+                "applicationID": "[parameters('arm_appInsightsName')]",
+                "retentionInDays": "[parameters('arm_appInsightsDataRetention')]"
+            },
+            "tags": {
+                "Client": "[parameters('arm_clientName')]",
+                "displayName": "AppInsightsComponent",
+                "Env": "[parameters('arm_environmentName')]",
+                "Region": "[RegionSelector.getAcronym()]"
+            },
+            "type": "Microsoft.Insights/components"
+        },
+        {
+            "name": "[parameters('arm_assessmentServiceName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2021-02-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('arm_hostingPlanName'))]",
+                "[resourceId('Microsoft.Insights/components', parameters('arm_appInsightsName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms', parameters('arm_hostingPlanName')))]": "Resource",
+                "displayName": "Website",
+                "Client": "[parameters('arm_clientName')]",
+                "Env": "[parameters('arm_environmentName')]",
+                "Region": "[RegionSelector.getAcronym()]"
+            },
+            "properties": {
+                "clientAffinityEnabled": true,
+                "httpsOnly": true,
+                "name": "[parameters('arm_assessmentServiceName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('arm_hostingPlanName'))]",
+                "siteConfig": {
+                    "alwaysOn": "[variables('isAlwayOnEnable')]",
+                    "cors": {
+                        "allowedOrigins": [
+                            "*"
+                        ]
+                    },
+                    "appSettings": [
+                        {
+                            "name": "key1",
+                            "value": "value1"
+                        },
+                        {
+                            "name": "key2",
+                            "value": "BTL Ltd"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(concat('Microsoft.Insights/components/', parameters('arm_appInsightsName'))).InstrumentationKey]"
+                        }
+                    ],
+                    "connectionStrings": [
+                        {
+                            "connectionString": "#{tkn_ConnectionString}#",
+                            "name": "secureAssess",
+                            "type": "SQLServer"
+                        }
+                    ]
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2021-02-01",
+                    "type": "siteextensions",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', parameters('arm_assessmentServiceName'))]"
+                    ],
+                    "name": "Microsoft.ApplicationInsights.AzureWebSites",
+                    "tags": {
+                        "displayName": "Site extention"
+                    }
+                }
+            ]
+        },
+        {
+			"type": "Microsoft.Insights/autoscalesettings",
+			"name": "[variables('settingName')]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/serverfarms', parameters('arm_hostingPlanName'))]"
+			],
+			"apiVersion": "2014-04-01",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"profiles": [
+					{
+						"name": "Delivery Hubs Scaling Profile",
+						"capacity": {
+							"minimum": "2",
+							"maximum": "6",
+							"default": "2"
+						},
+						"rules": [
+							{
+								"metricTrigger": {
+									"metricName": "[parameters('metricName')]",
+									"metricResourceUri": "[variables('targetResourceId')]",
+									"timeGrain": "PT5M",
+									"statistic": "Average",
+									"timeWindow": "PT10M",
+									"timeAggregation": "Average",
+									"operator": "GreaterThan",
+									"threshold": "[parameters('metricThresholdToScaleOut')]"
+								},
+								"scaleAction": {
+									"direction": "Increase",
+									"type": "PercentChangeCount",
+									"value": "[parameters('changePercentScaleOut')]",
+									"cooldown": "PT10M"
+								}
+							},
+							{
+								"metricTrigger": {
+									"metricName": "[parameters('metricName')]",
+									"metricResourceUri": "[variables('targetResourceId')]",
+									"timeGrain": "PT5M",
+									"statistic": "Average",
+									"timeWindow": "PT10M",
+									"timeAggregation": "Average",
+									"operator": "LessThan",
+									"threshold": "[parameters('metricThresholdToScaleIn')]"
+								},
+								"scaleAction": {
+									"direction": "Decrease",
+									"type": "PercentChangeCount",
+									"value": "[parameters('changePercentScaleIn')]",
+									"cooldown": "PT10M"
+								}
+							}
+						]
+					}
+				],
+				"enabled": "[parameters('autoscaleEnabled')]",
+				"targetResourceUri": "[variables('targetResourceId')]"
+			}
+		}
+    ],
+    "outputs": {
+        "alwaysOn": {
+            "type": "bool",
+            "value": "[variables('isAlwayOnEnable')]"
+        }
+    }
+}
