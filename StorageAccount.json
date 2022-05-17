@@ -17,7 +17,9 @@
             "allowedValues": [ "Standard_LRS", "Standard_GRS", "Standard_RAGRS", "Standard_ZRS", "Premium_LRS", "Premium_ZRS", "Standard_GZRS", "Standard_RAGZRS" ]
         }
     },
-    "variables": {},
+    "variables": {
+        "containerName": "[format('{0}/default/{1}', parameters('arm_storageAccountName'), 'secureassess')]"
+    },
     "resources": [
         {
             "type": "Microsoft.Storage/storageAccounts",
@@ -35,6 +37,14 @@
             "properties": {
                 "accessTier": "Hot"
             }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2021-04-01",
+            "name": "[variables('containerName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('arm_storageAccountName'))]"
+            ]
         }
     ],
     "outputs": {}
